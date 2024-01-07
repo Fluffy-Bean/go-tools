@@ -5,7 +5,7 @@ import (
 	"github.com/gofrs/uuid"
 )
 
-type Storage interface {
+type storage interface {
 	Get(session *Session)
 	Set(session Session) error
 	Delete(key string)
@@ -13,10 +13,10 @@ type Storage interface {
 }
 
 type Sessions struct {
-	CookieName    string
-	CookieHashKey string
-	MaxAge        int
-	CookieStorage Storage
+	Storage storage
+	Name    string
+	HashKey string
+	MaxAge  int
 }
 
 type Session struct {
@@ -27,13 +27,11 @@ type Session struct {
 
 func (s *Sessions) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var (
-			session Session
-		)
+		var session Session
 
-		session.Cookie, _ = c.Cookie(s.CookieName)
+		session.Cookie, _ = c.Cookie(s.Name)
 
-		s.CookieStorage.Get(&session)
+		s.Storage.Get(&session)
 
 		c.Set("session", session)
 		c.Next()
@@ -41,17 +39,40 @@ func (s *Sessions) Middleware() gin.HandlerFunc {
 }
 
 func (s *Sessions) NewSession(c *gin.Context, userID string) {
-	var (
-		session Session
-	)
+	session := Session{
+		UserID:        userID,
+		Cookie:        uuid.NewV5(uuid.NamespaceOID, userID).String(),
+		Authenticated: true,
+	}
 
-	session.Cookie = uuid.NewV5(uuid.NamespaceOID, userID).String()
-	session.UserID = userID
-	session.Authenticated = true
-
-	if s.CookieStorage.Set(session) != nil {
+	if s.Storage.Set(session) != nil {
 		panic("session already exists")
 	}
 
-	c.Set(s.CookieName, session.Cookie)
+	c.Set(s.Name, session.Cookie)
+}
+
+func (s *Sessions) GetSession(c *gin.Context) Session {
+	cookie := c.MustGet(s.Name).(Session)
+	s.Storage.Get(&cookie)
+	return cookie
+}
+
+func (s *Sessions) DeleteSession(c *gin.Context) {
+	cookie := s.GetSession(c)
+	s.Storage.Delete(cookie.Cookie)
+	c.SetCookie(s.Name, "", -1, "/", "", false, true)
+}
+
+func (s *Sessions) Clear() {
+	s.Storage.Clear()
+}
+
+func NewMiddleware(storage storage, name string, hashKey string, maxAge int) *Sessions {
+	return &Sessions{
+		Storage: storage,
+		Name:    name,
+		HashKey: hashKey,
+		MaxAge:  maxAge,
+	}
 }

@@ -1,4 +1,4 @@
-module github.com/Fluffy-Bean/go-tools/gin-sessions
+module github.com/fluffy-bean/go-tools/gin-sessions
 
 go 1.21.5
 

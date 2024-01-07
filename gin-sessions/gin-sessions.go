@@ -27,11 +27,15 @@ type Session struct {
 
 func (s *Sessions) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var session Session
+		var (
+			session Session
+			err     error
+		)
 
-		session.Cookie, _ = c.Cookie(s.Name)
-
-		s.Storage.Get(&session)
+		session.Cookie, err = c.Cookie(s.Name)
+		if err == nil {
+			s.Storage.Get(&session)
+		}
 
 		c.Set("session", session)
 		c.Next()
